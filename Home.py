@@ -2,8 +2,6 @@ import os
 import streamlit as st
 import pandas as pd
 import numpy as np
-import plotly.express as px
-import plotly.graph_objects as go
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.preprocessing import StandardScaler, MinMaxScaler, RobustScaler
 from sklearn.pipeline import Pipeline
@@ -96,6 +94,21 @@ st.markdown(
         font-weight: 600;
         font-size: 1.1rem;
         margin: 10px 0 15px 0;
+    }
+    .risk-meter-box {
+        background-color: var(--secondary-background-color);
+        border: 1px solid rgba(128, 128, 128, 0.22);
+        border-radius: 14px;
+        padding: 16px;
+        margin-top: 8px;
+    }
+    .risk-bar-bg {
+        width: 100%;
+        height: 22px;
+        background-color: #e5e7eb;
+        border-radius: 999px;
+        overflow: hidden;
+        margin: 10px 0;
     }
     </style>
     """,
@@ -241,7 +254,6 @@ elif scaler_opt == "RobustScaler":
 else:
     scaler = "passthrough"
 
-# โมเดลสำหรับประเมินผลบนชุดทดสอบ
 eval_pipeline = Pipeline(
     [("scaler", scaler), ("knn", KNeighborsClassifier(n_neighbors=k_val, weights=weights_opt))]
 )
@@ -253,7 +265,6 @@ prec = precision_score(y_test, y_pred_test)
 rec = recall_score(y_test, y_pred_test)
 f1 = f1_score(y_test, y_pred_test)
 
-# โมเดลหลักฝึกสอนจากข้อมูลทั้งหมดสำหรับทำนายเคสใหม่
 final_pipeline = Pipeline(
     [("scaler", scaler), ("knn", KNeighborsClassifier(n_neighbors=k_val, weights=weights_opt))]
 )
@@ -393,8 +404,9 @@ with tab_pred:
             pred = final_pipeline.predict(x_input)[0]
             proba = final_pipeline.predict_proba(x_input)[0]
             risk_pct = proba[1] * 100
+            bar_color = "#E74C3C" if pred == 1 else "#2ECC71"
 
-            r_col1, r_col2, r_col3 = st.columns([1.2, 1, 1])
+            r_col1, r_col2 = st.columns([1.4, 1])
 
             with r_col1:
                 st.subheader("สรุปผลการทำนาย:")
@@ -405,32 +417,31 @@ with tab_pred:
                     st.error("⚠️ **ผลการทำนาย: 1 (มีความเสี่ยงเป็นโรคหัวใจ)**")
                     st.write(f"โอกาสเสี่ยงเป็นโรคหัวใจ: **{risk_pct:.1f}%**")
 
-            with r_col2:
-                fig_gauge = go.Figure(
-                    go.Indicator(
-                        mode="gauge+number",
-                        value=risk_pct,
-                        number={"suffix": "%"},
-                        title={"text": "ระดับความเสี่ยง"},
-                        gauge={
-                            "axis": {"range": [0, 100]},
-                            "bar": {"color": "#E74C3C" if pred == 1 else "#2ECC71"},
-                            "steps": [
-                                {"range": [0, 40], "color": "#D5F5E3"},
-                                {"range": [40, 70], "color": "#FCF3CF"},
-                                {"range": [70, 100], "color": "#FADBD8"},
-                            ],
-                        },
-                    )
+                st.markdown(
+                    f"""
+                    <div class="risk-meter-box">
+                        <div style="display:flex; justify-content:space-between; font-weight:600;">
+                            <span>ระดับความเสี่ยงโรคหัวใจ (Risk Score)</span>
+                            <span style="color:{bar_color};">{risk_pct:.1f}%</span>
+                        </div>
+                        <div class="risk-bar-bg">
+                            <div style="width:{risk_pct:.1f}%; height:100%; background-color:{bar_color}; border-radius:999px;"></div>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; font-size:0.8rem; opacity:0.75;">
+                            <span>0% (ปกติ)</span>
+                            <span>50% (ปานกลาง)</span>
+                            <span>100% (เสี่ยงสูง)</span>
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
                 )
-                fig_gauge.update_layout(height=230, margin=dict(l=15, r=15, t=40, b=10))
-                st.plotly_chart(fig_gauge, use_container_width=True)
 
-            with r_col3:
+            with r_col2:
                 if pred == 0:
-                    show_safe_image("./img/Heard2.jpg", caption="ปกติ (No Heart Disease)", width=210)
+                    show_safe_image("./img/Heard2.jpg", caption="ปกติ (No Heart Disease)", width=230)
                 else:
-                    show_safe_image("./img/Heard1.png", caption="เสี่ยงโรคหัวใจ (Heart Disease)", width=210)
+                    show_safe_image("./img/Heard1.png", caption="เสี่ยงโรคหัวใจ (Heart Disease)", width=230)
         else:
             st.info("👆 กรุณากรอกข้อมูลด้านบนให้ครบถ้วน แล้วกดปุ่ม **'🔍 ทำนายผล'**")
 
@@ -485,7 +496,7 @@ with tab_pred:
                 st.error(f"เกิดข้อผิดพลาดในการอ่านไฟล์: {e}")
 
 # ------------------------------------------------------------------------------
-# TAB 2: ตารางข้อมูลและสถิติค่าเฉลี่ย (ส่วนที่ 2 ของ Home.py เดิม)
+# TAB 2: ตารางข้อมูลและสถิติค่าเฉลี่ย
 # ------------------------------------------------------------------------------
 with tab_eda:
     st.markdown('<div class="banner-red">📊 สถิติข้อมูลโรคหัวใจ (Heart3.csv)</div>', unsafe_allow_html=True)
@@ -522,21 +533,23 @@ with tab_eval:
             pipe_k.fit(X_train, y_train)
             test_accs.append(pipe_k.score(X_test, y_test) * 100)
 
-        df_k = pd.DataFrame({"ค่า K": k_list, "Test Accuracy (%)": test_accs, "5-Fold CV Accuracy (%)": cv_accs})
-        fig_k = px.line(df_k, x="ค่า K", y=["Test Accuracy (%)", "5-Fold CV Accuracy (%)"], markers=True)
-        fig_k.add_vline(x=k_val, line_dash="dash", line_color="green", annotation_text=f"K={k_val}")
-        fig_k.update_layout(height=360)
-        st.plotly_chart(fig_k, use_container_width=True)
+        df_k = pd.DataFrame(
+            {
+                "Test Accuracy (%)": test_accs,
+                "5-Fold CV Accuracy (%)": cv_accs,
+            },
+            index=k_list,
+        )
+        df_k.index.name = "ค่า K"
+        st.line_chart(df_k, color=["#E74C3C", "#2E86C1"])
 
     with c_k2:
-        st.subheader("Confusion Matrix")
+        st.subheader("Confusion Matrix (ชุดทดสอบ)")
         cm = confusion_matrix(y_test, y_pred_test)
-        fig_cm = px.imshow(
+        cm_df = pd.DataFrame(
             cm,
-            text_auto=True,
-            x=["ทำนาย: ปกติ (0)", "ทำนาย: โรคหัวใจ (1)"],
-            y=["จริง: ปกติ (0)", "จริง: โรคหัวใจ (1)"],
-            color_continuous_scale="Reds",
+            index=["ข้อมูลจริง: ปกติ (0)", "ข้อมูลจริง: โรคหัวใจ (1)"],
+            columns=["ทำนาย: ปกติ (0)", "ทำนาย: โรคหัวใจ (1)"],
         )
-        fig_cm.update_layout(height=360, coloraxis_showscale=False)
-        st.plotly_chart(fig_cm, use_container_width=True)
+        st.dataframe(cm_df, use_container_width=True)
+        st.caption(f"จากข้อมูลทดสอบทั้งหมด {len(y_test)} รายการ (ทายถูก {cm[0,0] + cm[1,1]} รายการ)")
